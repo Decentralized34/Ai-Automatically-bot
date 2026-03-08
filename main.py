@@ -2,7 +2,6 @@ import os
 import telebot
 import yt_dlp
 from gtts import gTTS
-from pydub import AudioSegment
 from telebot import types
 import time
 
@@ -23,75 +22,44 @@ def download_info_and_audio(url):
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
-            'preferredquality': '192', # High Quality ဖြစ်အောင် 192 ထားထားပါတယ်
+            'preferredquality': '192',
         }],
         'quiet': True,
-        'max_filesize': 20 * 1024 * 1024, # 20MB အထိ ခွင့်ပြုပေးထားပါတယ်
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        title = info.get('title', 'ဗီဒီယို ခေါင်းစဉ်မရှိပါ')
+        title = info.get('title', 'ဗီဒီယို ခေါင်းစဉ်')
         description = info.get('description', 'အသေးစိတ်စာသား မရှိပါ')
-    return 'input_audio.mp3', title, description
-
-def main_menu_button():
-    markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("မူလသို့ပြန်သွားရန်", callback_data="reset")
-    markup.add(btn)
-    return markup
-
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "TikTok အသံရှည် မြန်မာလိုပြောင်းပေးမည့် Bot မှ ကြိုဆိုပါတယ်! ✨\nKey မလိုဘဲ စိတ်ချလက်ချ သုံးနိုင်ပါပြီ။")
-
-@bot.callback_query_handler(func=lambda call: call.data == "reset")
-def reset_action(call):
-    bot.send_message(call.message.chat.id, "TikTok Link အသစ်တစ်ခု ပေးပို့နိုင်ပါပြီ။")
+    return title, description
 
 @bot.message_handler(func=lambda message: "tiktok.com" in message.text)
 def handle_tiktok(message):
-    user_id = message.from_user.id
-    current_time = time.time()
-
-    # ၁၀ မိနစ် Cooldown
-    if user_id in last_used_time and (current_time - last_used_time[user_id] < 600):
-        remaining = int((600 - (current_time - last_used_time[user_id])) / 60)
-        bot.reply_to(message, f"နောက်ထပ် Video အတွက် {remaining} မိနစ် စောင့်ပေးပါဦး။")
-        return
-
     try:
-        msg = bot.send_message(message.chat.id, "အသံဖိုင်အရှည် ထုတ်ယူနေပါတယ် ခဏစောင့်ပေးပါ... ⚡")
-        audio_file, video_title, video_desc = download_info_and_audio(message.text)
+        msg = bot.send_message(message.chat.id, "အသံဖိုင်ကို စနစ်တကျ ပြင်ဆင်နေပါပြီ... ခဏစောင့်ပေးပါ ⚡")
         
-        # အသံဖိုင် ရှည်ရှည်ရအောင် စာသားများကို စုစည်းခြင်း
+        # Audio ဖိုင်အစား စာသားကို အရင်ယူမယ်
+        video_title, video_desc = download_info_and_audio(message.text)
+        
+        # အသံဖိုင် ရှည်ရှည်ရအောင် စာသားကို သေချာစီစဉ်ခြင်း
         full_text = f"မင်္ဂလာပါ ခင်ဗျာ။ အခု ဗီဒီယိုရဲ့ ခေါင်းစဉ်ကတော့ {video_title} ဖြစ်ပါတယ်။ "
         full_text += f"ဒီဗီဒီယိုမှာ ရေးသားထားတဲ့ အကြောင်းအရာတွေကတော့ {video_desc} တို့ပဲ ဖြစ်ပါတယ်။ "
-        full_text += "ဗီဒီယိုကို အဆုံးထိ နားဆင်ပေးတဲ့အတွက် ကျေးဇူးတင်ပါတယ်။ နောက်ထပ် ဗီဒီယိုတွေမှာ ပြန်လည် ဆုံတွေ့ကြပါမယ် ခင်ဗျာ။"
+        full_text += "ဗီဒီယိုကို အဆုံးထိ နားဆင်ပေးတဲ့အတွက် ကျေးဇူးတင်ပါတယ်။"
         
-        # မြန်မာလို အသံထွက်ပေးခြင်း
-        tts = gTTS(text=full_text, lang='my')
-        tts.save("temp.mp3")
+        # Google TTS ဖြင့် အသံဖိုင်ထုတ်ခြင်း (အသံအရည်အသွေး ကောင်းအောင်)
+        tts = gTTS(text=full_text, lang='my', slow=False)
+        tts.save("recap_audio.mp3")
         
-        # အသံကို ပုံမှန်အရှိန် (1.0) နဲ့ပဲ ထားထားလို့ အသံဖိုင် ပိုရှည်ရှည်ထွက်လာမှာပါ
-        sound = AudioSegment.from_file("temp.mp3")
-        final_filename = "recap_audio.mp3"
-        sound.export(final_filename, format="mp3")
-        
-        with open(final_filename, 'rb') as audio:
+        with open("recap_audio.mp3", 'rb') as audio:
             bot.send_audio(
                 message.chat.id, 
                 audio, 
-                caption=f"📝 ခေါင်းစဉ် - {video_title}\n\n(မြန်မာအသံဖြင့် ၁ မိနစ်ကျော် ၂ မိနစ်စာ ဖတ်ပြထားပါသည်။)", 
-                reply_markup=main_menu_button()
+                caption=f"📝 ခေါင်းစဉ် - {video_title}\n(အသံ အရည်အသွေးကောင်းဖြင့် တင်ပေးလိုက်ပါပြီ။)"
             )
         
-        last_used_time[user_id] = current_time
-        if os.path.exists(audio_file): os.remove(audio_file)
-        if os.path.exists("temp.mp3"): os.remove("temp.mp3")
-        if os.path.exists(final_filename): os.remove(final_filename)
+        if os.path.exists("recap_audio.mp3"): os.remove("recap_audio.mp3")
         bot.delete_message(message.chat.id, msg.message_id)
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"Error: {str(e)}\nခဏနေမှ ပြန်စမ်းကြည့်ပါဦး။", reply_markup=main_menu_button())
+        bot.send_message(message.chat.id, f"Error: {str(e)}")
 
 bot.polling()
